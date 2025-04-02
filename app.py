@@ -1,20 +1,23 @@
-import streamlit as st
 import pandas as pd
+import streamlit as st
 from datetime import datetime, timedelta
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error
+import joblib
 
-# Load the data
-@st.cache
+# Use the new caching method (st.cache_data) to load the data
+@st.cache_data
 def load_data():
-    data = pd.read_csv('https://raw.githubusercontent.com/your-username/your-repository-name/main/Report202503141112%20-%20Sheet1.csv', header=None, names=['Store', 'Product', 'Date', 'Quantity'])
+    data_url = 'https://raw.githubusercontent.com/your-username/your-repository-name/main/Report202503141112%20-%20Sheet1.csv'
+    data = pd.read_csv(data_url, header=None, names=['Store', 'Product', 'Date', 'Quantity'])
     return data
 
+# Load the data
 data = load_data()
 
-# Extract store location from the Store column
+# Extract store location from the Store column - FIXED APPROACH
 def extract_location(store_name):
     if 'Lidl Ireland Gmbh - ' in store_name:
         return store_name.split('Lidl Ireland Gmbh - ')[1]
@@ -68,11 +71,27 @@ rf_mae = mean_absolute_error(y_test, rf_y_pred)
 lr_y_pred = lr_model.predict(X_test)
 lr_mae = mean_absolute_error(y_test, lr_y_pred)
 
-# Round to nearest 10
+# Compare the models and select the best one
+if rf_mae < lr_mae:
+    best_model = rf_model
+    best_model_name = "Random Forest Regressor"
+    best_model_mae = rf_mae
+else:
+    best_model = lr_model
+    best_model_name = "Linear Regression"
+    best_model_mae = lr_mae
+
+# Save the best model using joblib
+joblib.dump(best_model, 'best_model.pkl')
+
+# Output the best model information
+print(f"The Best Model: {best_model_name}")
+print(f"Mean Absolute Error for {best_model_name}: {best_model_mae:.2f}")
+
+# Prediction function
 def round_to_nearest_10(value):
     return round(value / 10) * 10
 
-# Function to predict demand
 def predict_demand(start_date, end_date, location, model):
     date_range = pd.date_range(start=start_date, end=end_date)
     predictions = []
@@ -96,53 +115,53 @@ def predict_demand(start_date, end_date, location, model):
             f'Location_{location}': 1
         }
         
-        # Set other locations to 0
         for loc in ['Charleville', 'Mullingar', 'Newbridge', 'Northern Ireland Limited']:
             if loc != location:
                 features[f'Location_{loc}'] = 0
         
-        # Create DataFrame
         input_df = pd.DataFrame([features])
         
-        # Ensure all columns are present
         for col in X.columns:
             if col not in input_df.columns:
                 input_df[col] = 0
         
-        # Reorder columns to match training data
         input_df = input_df[X.columns]
         
-        # Predict
         pred = model.predict(input_df)
-        rounded_pred = round_to_nearest_10(pred[0])  # Round to nearest 10
+        rounded_pred = round_to_nearest_10(pred[0])
         predictions.append((date, rounded_pred))
     
     return pd.DataFrame(predictions, columns=['Date', 'Predicted Quantity'])
 
-# Streamlit App Interface
-st.title("Product Demand Prediction")
-st.write(f"Mean Absolute Error of Random Forest Regressor: {rf_mae:.2f}")
-st.write(f"Mean Absolute Error of Linear Regression: {lr_mae:.2f}")
+# Function to take user input for date and location
+def get_input_and_predict():
+    start_date_input = input("Enter the start date (YYYY-MM-DD): ")
+    end_date_input = input("Enter the end date (YYYY-MM-DD): ")
 
-start_date = st.date_input("Select start date", datetime.now())
-end_date = st.date_input("Select end date", datetime.now() + timedelta(days=6))
+    try:
+        start_date = datetime.strptime(start_date_input, "%Y-%m-%d")
+        end_date = datetime.strptime(end_date_input, "%Y-%m-%d")
+    except ValueError:
+        print("Invalid date format. Please use YYYY-MM-DD.")
+        return
 
-location = st.selectbox("Select Store Location", ['Charleville', 'Mullingar', 'Newbridge', 'Northern Ireland Limited'])
+    location = input("Enter store location (Charleville, Mullingar, Newbridge, Northern Ireland Limited): ")
 
-model_choice = st.radio("Choose Prediction Model", ("Random Forest Regressor", "Linear Regression"))
+    if location not in ['Charleville', 'Mullingar', 'Newbridge', 'Northern Ireland Limited']:
+        print("Invalid location. Please choose from the available locations.")
+        return
 
-if st.button("Predict"):
-    if model_choice == "Random Forest Regressor":
-        model = rf_model
-    else:
-        model = lr_model
+    print(f"Using {best_model_name} for prediction...")
+    print(f"Best Model MAE: {best_model_mae:.2f}")
+    print(f"Predicting demand for {location} from {start_date} to {end_date}...")
+
+    predictions = predict_demand(start_date, end_date, location, best_model)
     
-    predictions = predict_demand(start_date, end_date, location, model)
-    st.write(f"Predicted demand for {location} from {start_date} to {end_date}:")
-    st.dataframe(predictions)
+    print(f"Predicted demand for {location} from {start_date} to {end_date}:")
+    print(predictions.to_string(index=False))
 
-    # Displaying MAE (Accuracy)
-    if model_choice == "Random Forest Regressor":
-        st.write(f"Accuracy (Mean Absolute Error) of Random Forest: {rf_mae:.2f}")
-    elif model_choice == "Linear Regression":
-        st.write(f"Accuracy (Mean Absolute Error) of Linear Regression: {lr_mae:.2f}")
+# Call the function to get input and predict
+get_input_and_predict()
+
+# To load the model later
+# loaded_model = joblib.load('best_model.pkl')
