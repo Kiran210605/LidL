@@ -11,15 +11,27 @@ import joblib  # Importing joblib for model saving/loading
 @st.cache_data
 def load_data():
     try:
-        # Load the CSV file from GitHub
+        # Try loading the CSV file from GitHub
         data = pd.read_csv('https://raw.githubusercontent.com/your-username/your-repository-name/main/Report202503141112%20-%20Sheet1.csv', header=None, names=['Store', 'Product', 'Date', 'Quantity'])
         return data
     except Exception as e:
+        # Display error message in Streamlit
         st.error(f"Error loading data from GitHub: {e}")
-        # Fallback to loading from a local file if GitHub URL fails
-        return pd.read_csv('/path/to/local/Report202503141112 - Sheet1.csv', header=None, names=['Store', 'Product', 'Date', 'Quantity'])
+        # Fallback: Load the data from a local path if GitHub URL fails
+        st.info("Attempting to load data from local path...")
+        try:
+            data = pd.read_csv('/path/to/local/Report202503141112 - Sheet1.csv', header=None, names=['Store', 'Product', 'Date', 'Quantity'])
+            return data
+        except Exception as e:
+            st.error(f"Error loading local file: {e}")
+            return None  # Return None if both methods fail
 
 data = load_data()
+
+# If data is not loaded, stop the app with a message
+if data is None:
+    st.error("Failed to load the data. Please check the file path or the GitHub URL.")
+    st.stop()  # Stops the app execution
 
 # Extract store location from the Store column
 def extract_location(store_name):
