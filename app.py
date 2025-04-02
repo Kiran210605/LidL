@@ -1,23 +1,27 @@
-import pandas as pd
 import streamlit as st
+import pandas as pd
 from datetime import datetime, timedelta
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error
-import joblib
+import joblib  # Importing joblib for model saving/loading
 
-# Use the new caching method (st.cache_data) to load the data
+# Load the data (use st.cache_data instead of st.cache)
 @st.cache_data
 def load_data():
-    data_url = 'https://raw.githubusercontent.com/your-username/your-repository-name/main/Report202503141112%20-%20Sheet1.csv'
-    data = pd.read_csv(data_url, header=None, names=['Store', 'Product', 'Date', 'Quantity'])
-    return data
+    try:
+        # Load the CSV file from GitHub
+        data = pd.read_csv('https://raw.githubusercontent.com/your-username/your-repository-name/main/Report202503141112%20-%20Sheet1.csv', header=None, names=['Store', 'Product', 'Date', 'Quantity'])
+        return data
+    except Exception as e:
+        st.error(f"Error loading data from GitHub: {e}")
+        # Fallback to loading from a local file if GitHub URL fails
+        return pd.read_csv('/path/to/local/Report202503141112 - Sheet1.csv', header=None, names=['Store', 'Product', 'Date', 'Quantity'])
 
-# Load the data
 data = load_data()
 
-# Extract store location from the Store column - FIXED APPROACH
+# Extract store location from the Store column
 def extract_location(store_name):
     if 'Lidl Ireland Gmbh - ' in store_name:
         return store_name.split('Lidl Ireland Gmbh - ')[1]
@@ -81,17 +85,18 @@ else:
     best_model_name = "Linear Regression"
     best_model_mae = lr_mae
 
-# Save the best model using joblib
-joblib.dump(best_model, 'best_model.pkl')
-
 # Output the best model information
 print(f"The Best Model: {best_model_name}")
 print(f"Mean Absolute Error for {best_model_name}: {best_model_mae:.2f}")
 
-# Prediction function
+# Save the best model using joblib
+joblib.dump(best_model, 'best_model.pkl')
+
+# Function to round predicted values to nearest 10
 def round_to_nearest_10(value):
     return round(value / 10) * 10
 
+# Prediction function
 def predict_demand(start_date, end_date, location, model):
     date_range = pd.date_range(start=start_date, end=end_date)
     predictions = []
@@ -115,20 +120,25 @@ def predict_demand(start_date, end_date, location, model):
             f'Location_{location}': 1
         }
         
+        # Set other locations to 0
         for loc in ['Charleville', 'Mullingar', 'Newbridge', 'Northern Ireland Limited']:
             if loc != location:
                 features[f'Location_{loc}'] = 0
         
+        # Create DataFrame
         input_df = pd.DataFrame([features])
         
+        # Ensure all columns are present
         for col in X.columns:
             if col not in input_df.columns:
                 input_df[col] = 0
         
+        # Reorder columns to match training data
         input_df = input_df[X.columns]
         
+        # Predict
         pred = model.predict(input_df)
-        rounded_pred = round_to_nearest_10(pred[0])
+        rounded_pred = round_to_nearest_10(pred[0])  # Round to nearest 10
         predictions.append((date, rounded_pred))
     
     return pd.DataFrame(predictions, columns=['Date', 'Predicted Quantity'])
@@ -157,6 +167,7 @@ def get_input_and_predict():
 
     predictions = predict_demand(start_date, end_date, location, best_model)
     
+    # Show the predicted demand along with accuracy
     print(f"Predicted demand for {location} from {start_date} to {end_date}:")
     print(predictions.to_string(index=False))
 
