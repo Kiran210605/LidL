@@ -52,7 +52,7 @@ def predict_demand(start_date, end_date, location, model, X_columns):
             if col not in input_df.columns:
                 input_df[col] = 0
         
-        # Reorder columns to match training data
+        # Reorder columns to match training data (to make sure the order matches)
         input_df = input_df[X_columns]
         
         # Predict with the trained model
