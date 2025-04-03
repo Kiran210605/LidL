@@ -21,6 +21,7 @@ def predict_demand(start_date, end_date, location, model, X_columns):
     predictions = []
     
     for date in date_range:
+        # Feature generation
         features = {
             'Day': date.day,
             'Month': date.month,
@@ -38,29 +39,32 @@ def predict_demand(start_date, end_date, location, model, X_columns):
             'PackageSize_16 x 130g': 1,
             f'Location_{location}': 1
         }
-        
+
         # Set other locations to 0
         for loc in ['Charleville', 'Mullingar', 'Newbridge', 'Northern Ireland Limited']:
             if loc != location:
                 features[f'Location_{loc}'] = 0
         
-        # Create DataFrame for input data
+        # Create a DataFrame from the features
         input_df = pd.DataFrame([features])
         
-        # Ensure all expected columns are present in input_df, with default value 0 for missing columns
+        # Ensure all the expected columns (from training) are present in the input_df
         for col in X_columns:
             if col not in input_df.columns:
                 input_df[col] = 0
         
-        # Reorder columns to match training data column order
+        # Reorder the input_df columns to match the training data column order
         input_df = input_df[X_columns]
         
-        # Predict with the trained model
+        # Make the prediction with the model
         pred = model.predict(input_df)
-        rounded_pred = round_to_nearest_10(pred[0])  # Round to nearest 10
+        
+        # Round the prediction to the nearest 10
+        rounded_pred = round_to_nearest_10(pred[0])
         predictions.append((date, rounded_pred))
     
     return pd.DataFrame(predictions, columns=['Date', 'Predicted Quantity'])
+
 
 
 
