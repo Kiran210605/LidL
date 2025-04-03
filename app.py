@@ -20,9 +20,8 @@ def round_to_nearest_10(value):
 def predict_demand(start_date, end_date, location, model, X_columns):
     date_range = pd.date_range(start=start_date, end=end_date)
     predictions = []
-    
+
     for date in date_range:
-        # Feature generation
         features = {
             'Day': date.day,
             'Month': date.month,
@@ -45,26 +44,35 @@ def predict_demand(start_date, end_date, location, model, X_columns):
         for loc in ['Charleville', 'Mullingar', 'Newbridge', 'Northern Ireland Limited']:
             if loc != location:
                 features[f'Location_{loc}'] = 0
-        
+
         # Create a DataFrame from the features
         input_df = pd.DataFrame([features])
-        
+
         # Ensure all the expected columns (from training) are present in the input_df
-        for col in X_columns:
-            if col not in input_df.columns:
-                input_df[col] = 0
-        
+        missing_columns = [col for col in X_columns if col not in input_df.columns]
+        for col in missing_columns:
+            input_df[col] = 0  # Add missing columns with value 0
+
         # Reorder the input_df columns to match the training data column order
         input_df = input_df[X_columns]
-        
+
+        # Debugging step: print columns and their order for verification
+        print("Input columns for prediction:", input_df.columns.tolist())
+        print("Expected training columns:", X_columns)
+
         # Make the prediction with the model
         pred = model.predict(input_df)
         
         # Round the prediction to the nearest 10
         rounded_pred = round_to_nearest_10(pred[0])
         predictions.append((date, rounded_pred))
-    
+
     return pd.DataFrame(predictions, columns=['Date', 'Predicted Quantity'])
+
+# Call the function in your Streamlit app as follows
+X_columns = X.columns.tolist()  # Capture the column names during training
+predictions = predict_demand(start_date, end_date, location, best_model, X_columns)
+
 
 
 # Streamlit user interface
