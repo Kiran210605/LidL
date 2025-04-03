@@ -1,39 +1,12 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime, timedelta
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.linear_model import LinearRegression
-from sklearn.metrics import mean_absolute_error
-import joblib  # Importing joblib for model saving/loading
+import joblib
+from datetime import datetime
 
-# Load the data (use st.cache_data instead of st.cache)
-@st.cache_data
-def load_data():
-    try:
-        # Try loading the CSV file from GitHub
-        data = pd.read_csv('https://raw.githubusercontent.com/your-username/your-repository-name/main/Report202503141112%20-%20Sheet1.csv', header=None, names=['Store', 'Product', 'Date', 'Quantity'])
-        return data
-    except Exception as e:
-        # Display error message in Streamlit
-        st.error(f"Error loading data from GitHub: {e}")
-        # Fallback: Load the data from a local path if GitHub URL fails
-        st.info("Attempting to load data from local path...")
-        try:
-            data = pd.read_csv('/path/to/local/Report202503141112 - Sheet1.csv', header=None, names=['Store', 'Product', 'Date', 'Quantity'])
-            return data
-        except Exception as e:
-            st.error(f"Error loading local file: {e}")
-            return None  # Return None if both methods fail
+# Load the best model
+best_model = joblib.load('best_model.pkl')
 
-data = load_data()
-
-# If data is not loaded, stop the app with a message
-if data is None:
-    st.error("Failed to load the data. Please check the file path or the GitHub URL.")
-    st.stop()  # Stops the app execution
-
-# Extract store location from the Store column
+# Define the feature extraction function
 def extract_location(store_name):
     if 'Lidl Ireland Gmbh - ' in store_name:
         return store_name.split('Lidl Ireland Gmbh - ')[1]
@@ -41,75 +14,10 @@ def extract_location(store_name):
         return 'Northern Ireland Limited'
     return store_name
 
-data['Location'] = data['Store'].apply(extract_location)
-
-# Convert date to datetime and extract features
-data['Date'] = pd.to_datetime(data['Date'], dayfirst=True)
-data['Day'] = data['Date'].dt.day
-data['Month'] = data['Date'].dt.month
-data['Year'] = data['Date'].dt.year
-data['DayOfWeek'] = data['Date'].dt.dayofweek  # Monday=0, Sunday=6
-data['DayOfYear'] = data['Date'].dt.dayofyear
-data['Week'] = data['Date'].dt.isocalendar().week
-
-# Extract product details
-data['ProductType'] = 'Baby Corn'  # All products are Baby Corn in this dataset
-data['PackageSize'] = data['Product'].str.extract(r'(\d+ x \d+g)')[0]  # Extract first match
-
-# One-hot encode categorical variables
-data = pd.get_dummies(data, columns=['Location', 'DayOfWeek', 'PackageSize'])
-
-# Prepare features
-features = ['Day', 'Month', 'Year', 'DayOfYear', 'Week'] + \
-           [col for col in data.columns if col.startswith('Location_') or 
-            col.startswith('DayOfWeek_') or 
-            col.startswith('PackageSize_')]
-
-X = data[features]
-y = data['Quantity']
-
-# Split data into train and test sets
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-# Train RandomForestRegressor model
-rf_model = RandomForestRegressor(n_estimators=100, random_state=42)
-rf_model.fit(X_train, y_train)
-
-# Train Linear Regression model
-lr_model = LinearRegression()
-lr_model.fit(X_train, y_train)
-
-# Predict and calculate MAE for RandomForestRegressor
-rf_y_pred = rf_model.predict(X_test)
-rf_mae = mean_absolute_error(y_test, rf_y_pred)
-
-# Predict and calculate MAE for LinearRegression
-lr_y_pred = lr_model.predict(X_test)
-lr_mae = mean_absolute_error(y_test, lr_y_pred)
-
-# Compare the models and select the best one
-if rf_mae < lr_mae:
-    best_model = rf_model
-    best_model_name = "Random Forest Regressor"
-    best_model_mae = rf_mae
-else:
-    best_model = lr_model
-    best_model_name = "Linear Regression"
-    best_model_mae = lr_mae
-
-# Output the best model information
-print(f"The Best Model: {best_model_name}")
-print(f"Mean Absolute Error for {best_model_name}: {best_model_mae:.2f}")
-
-# Save the best model using joblib
-joblib.dump(best_model, 'best_model.pkl')
-
-# Function to round predicted values to nearest 10
 def round_to_nearest_10(value):
     return round(value / 10) * 10
 
-# Prediction function
-def predict_demand(start_date, end_date, location, model):
+def predict_demand(start_date, end_date, location, model, X_columns):
     date_range = pd.date_range(start=start_date, end=end_date)
     predictions = []
     
@@ -132,59 +40,48 @@ def predict_demand(start_date, end_date, location, model):
             f'Location_{location}': 1
         }
         
-        # Set other locations to 0
         for loc in ['Charleville', 'Mullingar', 'Newbridge', 'Northern Ireland Limited']:
             if loc != location:
                 features[f'Location_{loc}'] = 0
         
-        # Create DataFrame
         input_df = pd.DataFrame([features])
         
-        # Ensure all columns are present
-        for col in X.columns:
+        for col in X_columns:
             if col not in input_df.columns:
                 input_df[col] = 0
         
-        # Reorder columns to match training data
-        input_df = input_df[X.columns]
-        
-        # Predict
+        input_df = input_df[X_columns]
         pred = model.predict(input_df)
-        rounded_pred = round_to_nearest_10(pred[0])  # Round to nearest 10
+        rounded_pred = round_to_nearest_10(pred[0])
         predictions.append((date, rounded_pred))
     
     return pd.DataFrame(predictions, columns=['Date', 'Predicted Quantity'])
 
-# Function to take user input for date and location
-def get_input_and_predict():
-    start_date_input = input("Enter the start date (YYYY-MM-DD): ")
-    end_date_input = input("Enter the end date (YYYY-MM-DD): ")
+# Streamlit user interface
+st.title("Product Demand Prediction")
 
-    try:
-        start_date = datetime.strptime(start_date_input, "%Y-%m-%d")
-        end_date = datetime.strptime(end_date_input, "%Y-%m-%d")
-    except ValueError:
-        print("Invalid date format. Please use YYYY-MM-DD.")
-        return
+start_date_input = st.date_input("Enter the start date")
+end_date_input = st.date_input("Enter the end date")
+location = st.selectbox("Select store location", ["Charleville", "Mullingar", "Newbridge", "Northern Ireland Limited"])
 
-    location = input("Enter store location (Charleville, Mullingar, Newbridge, Northern Ireland Limited): ")
+if st.button("Predict Demand"):
+    if start_date_input and end_date_input and location:
+        # Ensure the dates are in the correct format
+        start_date = start_date_input
+        end_date = end_date_input
 
-    if location not in ['Charleville', 'Mullingar', 'Newbridge', 'Northern Ireland Limited']:
-        print("Invalid location. Please choose from the available locations.")
-        return
+        st.write(f"Predicting demand for {location} from {start_date} to {end_date}...")
 
-    print(f"Using {best_model_name} for prediction...")
-    print(f"Best Model MAE: {best_model_mae:.2f}")
-    print(f"Predicting demand for {location} from {start_date} to {end_date}...")
-
-    predictions = predict_demand(start_date, end_date, location, best_model)
-    
-    # Show the predicted demand along with accuracy
-    print(f"Predicted demand for {location} from {start_date} to {end_date}:")
-    print(predictions.to_string(index=False))
-
-# Call the function to get input and predict
-get_input_and_predict()
-
-# To load the model later
-# loaded_model = joblib.load('best_model.pkl')
+        # Load the saved model and extract feature names (you should load X.columns if you saved them)
+        X_columns = ['Day', 'Month', 'Year', 'DayOfYear', 'Week', 'DayOfWeek_0', 'DayOfWeek_1', 'DayOfWeek_2', 
+                     'DayOfWeek_3', 'DayOfWeek_4', 'DayOfWeek_5', 'DayOfWeek_6', 'PackageSize_14 x 170g', 
+                     'PackageSize_16 x 130g', 'Location_Charleville', 'Location_Mullingar', 'Location_Newbridge', 
+                     'Location_Northern Ireland Limited']
+        
+        # Get predictions
+        predictions = predict_demand(start_date, end_date, location, best_model, X_columns)
+        
+        st.write("Predicted demand:")
+        st.dataframe(predictions)
+    else:
+        st.error("Please provide all inputs.")
