@@ -16,7 +16,6 @@ def extract_location(store_name):
 
 def round_to_nearest_10(value):
     return round(value / 10) * 10
-
 def predict_demand(start_date, end_date, location, model, X_columns):
     date_range = pd.date_range(start=start_date, end=end_date)
     predictions = []
@@ -40,6 +39,7 @@ def predict_demand(start_date, end_date, location, model, X_columns):
             f'Location_{location}': 1
         }
         
+        # Set other locations to 0
         for loc in ['Charleville', 'Mullingar', 'Newbridge', 'Northern Ireland Limited']:
             if loc != location:
                 features[f'Location_{loc}'] = 0
@@ -47,12 +47,12 @@ def predict_demand(start_date, end_date, location, model, X_columns):
         # Create DataFrame for input data
         input_df = pd.DataFrame([features])
         
-        # Ensure all expected columns are present in input_df
+        # Ensure all expected columns are present in input_df, with default value 0 for missing columns
         for col in X_columns:
             if col not in input_df.columns:
                 input_df[col] = 0
         
-        # Reorder columns to match training data (to make sure the order matches)
+        # Reorder columns to match training data column order
         input_df = input_df[X_columns]
         
         # Predict with the trained model
@@ -61,6 +61,7 @@ def predict_demand(start_date, end_date, location, model, X_columns):
         predictions.append((date, rounded_pred))
     
     return pd.DataFrame(predictions, columns=['Date', 'Predicted Quantity'])
+
 
 
 # Streamlit user interface
