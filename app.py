@@ -1,19 +1,16 @@
-import streamlit as st
 import pandas as pd
 import joblib
+import streamlit as st
 from datetime import datetime
 
-# Load the best model
+# Load the saved model
 best_model = joblib.load('best_model.pkl')
 
-# Define the feature extraction function
-def extract_location(store_name):
-    if 'Lidl Ireland Gmbh - ' in store_name:
-        return store_name.split('Lidl Ireland Gmbh - ')[1]
-    elif 'Lidl Northern Ireland Limited' in store_name:
-        return 'Northern Ireland Limited'
-    return store_name
+# Load the saved feature columns (this was saved during training)
+with open('X_columns.pkl', 'rb') as f:
+    X_columns = joblib.load(f)
 
+# Function to round predicted values to the nearest 10
 def round_to_nearest_10(value):
     return round(value / 10) * 10
 
@@ -62,22 +59,17 @@ def predict_demand(start_date, end_date, location, model, X_columns):
 
         # Make the prediction with the model
         pred = model.predict(input_df)
-        
+
         # Round the prediction to the nearest 10
         rounded_pred = round_to_nearest_10(pred[0])
         predictions.append((date, rounded_pred))
 
     return pd.DataFrame(predictions, columns=['Date', 'Predicted Quantity'])
 
-# Call the function in your Streamlit app as follows
-X_columns = X.columns.tolist()  # Capture the column names during training
-predictions = predict_demand(start_date, end_date, location, best_model, X_columns)
-
-
-
-# Streamlit user interface
+# Streamlit interface
 st.title("Product Demand Prediction")
 
+# Input form for the user
 start_date_input = st.date_input("Enter the start date")
 end_date_input = st.date_input("Enter the end date")
 location = st.selectbox("Select store location", ["Charleville", "Mullingar", "Newbridge", "Northern Ireland Limited"])
@@ -90,15 +82,10 @@ if st.button("Predict Demand"):
 
         st.write(f"Predicting demand for {location} from {start_date} to {end_date}...")
 
-        # Load the saved model and extract feature names (you should load X.columns if you saved them)
-        X_columns = ['Day', 'Month', 'Year', 'DayOfYear', 'Week', 'DayOfWeek_0', 'DayOfWeek_1', 'DayOfWeek_2', 
-                     'DayOfWeek_3', 'DayOfWeek_4', 'DayOfWeek_5', 'DayOfWeek_6', 'PackageSize_14 x 170g', 
-                     'PackageSize_16 x 130g', 'Location_Charleville', 'Location_Mullingar', 'Location_Newbridge', 
-                     'Location_Northern Ireland Limited']
-        
         # Get predictions
         predictions = predict_demand(start_date, end_date, location, best_model, X_columns)
-        
+
+        # Show the predicted demand
         st.write("Predicted demand:")
         st.dataframe(predictions)
     else:
