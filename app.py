@@ -44,18 +44,24 @@ def predict_demand(start_date, end_date, location, model, X_columns):
             if loc != location:
                 features[f'Location_{loc}'] = 0
         
+        # Create DataFrame for input data
         input_df = pd.DataFrame([features])
         
+        # Ensure all expected columns are present in input_df
         for col in X_columns:
             if col not in input_df.columns:
                 input_df[col] = 0
         
+        # Reorder columns to match training data
         input_df = input_df[X_columns]
+        
+        # Predict with the trained model
         pred = model.predict(input_df)
-        rounded_pred = round_to_nearest_10(pred[0])
+        rounded_pred = round_to_nearest_10(pred[0])  # Round to nearest 10
         predictions.append((date, rounded_pred))
     
     return pd.DataFrame(predictions, columns=['Date', 'Predicted Quantity'])
+
 
 # Streamlit user interface
 st.title("Product Demand Prediction")
